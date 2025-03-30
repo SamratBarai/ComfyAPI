@@ -1,4 +1,4 @@
 /.gradio
 /comfyapi_client.egg-info
-/comfyapi-client
+/.venv
 .env
