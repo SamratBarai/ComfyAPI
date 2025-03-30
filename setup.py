@@ -7,7 +7,7 @@ def read(fname):
 
 setup(
     name='comfyapi-client', # Changed name slightly to be more descriptive and likely unique
-    version='0.1.0', # Initial version
+    version='1.0.0', # Initial version
     author='Samrat', # Placeholder - User should replace
     author_email='baraisamrat20@gmail.com', # Placeholder - User should replace
     description='A Python client library for interacting with the ComfyUI API.',
@@ -22,7 +22,6 @@ setup(
     classifiers=[
         'Development Status :: 3 - Alpha', # Initial development stage
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License', # Assuming MIT License
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
