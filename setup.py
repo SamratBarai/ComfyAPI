@@ -6,7 +6,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname), encoding='utf-8').read()
 
 setup(
-    name='comfyapi-client', # Changed name slightly to be more descriptive and likely unique
+    name='comfyapi', # Changed name slightly to be more descriptive and likely unique
     version='1.0.0', # Initial version
     author='Samrat', # Placeholder - User should replace
     author_email='baraisamrat20@gmail.com', # Placeholder - User should replace
