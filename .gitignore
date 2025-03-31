@@ -2,3 +2,4 @@
 /comfyapi.egg-info
 /.venv
 .env
+pypi_rec.txt

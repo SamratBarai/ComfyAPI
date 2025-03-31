@@ -12,8 +12,9 @@ from .client import (
     _find_output_in_history,
     _batch_submit_internal,
     _wait_and_get_all_outputs_internal,
-    download_output as _download_output,
+    # download_output as _download_output, # Removed internal import
     _get_base_url,
+    _generate_client_id, # Need this for fallback filename generation
     ComfyAPIError,
     ConnectionError,
     QueueError,
@@ -21,6 +22,8 @@ from .client import (
     ExecutionError,
     TimeoutError
 )
+import requests # Need requests here now
+import urllib.parse # Need urllib here now
 
 # --- Public API Functions ---
 
@@ -119,7 +122,7 @@ def submit(workflow):
     """
     return _queue_prompt(workflow)
 
-def batch_submit(workflow, seed_node_path, seeds=None, num_seeds=None):
+def batch_submit(workflow, num_seeds=None, seeds=None, seed_node_path=["3", "inputs", "seed"]):
     """
     Submits multiple instances of a workflow, varying the seed for each instance.
     You must provide either a list of seeds to use (`seeds`) or the number
@@ -156,7 +159,7 @@ def wait_for_finish(prompt_id, poll_interval=3, max_wait_time=600, status_callba
                                               Statuses: "polling", "finished", "error", "timeout".
 
     Returns:
-        str: The full URL of the primary output image (if found).
+        tuple: A tuple containing (filename, output_url) if successful.
 
     Raises:
         TimeoutError: If the job doesn't finish within max_wait_time.
@@ -200,9 +203,9 @@ def wait_and_get_all_outputs(uids, status_callback=None):
                                               Statuses: "started", "polling", "finished", "error", "timeout".
 
     Returns:
-        tuple: A tuple containing two dictionaries:
-               - results (dict): {uid: output_url} for successfully completed jobs.
-               - errors (dict): {uid: error_object} for jobs that failed or timed out.
+        tuple: A tuple containing:
+               - results_list (list): A list of `(filename, output_url)` tuples for successfully completed jobs.
+               - errors_list (list): A list of error objects/strings for jobs that failed or timed out.
 
     Raises:
         ComfyAPIError: For initial setup issues (like base URL not set). Errors during
@@ -210,12 +213,13 @@ def wait_and_get_all_outputs(uids, status_callback=None):
     """
     return _wait_and_get_all_outputs_internal(uids, status_callback)
 
+
 def download_output(output_url, save_path=".", filename=None):
     """
     Downloads the content from a ComfyUI output URL and saves it to a file.
 
     Args:
-        output_url (str): The full URL to the output file (e.g., from find_output_url).
+        output_url (str): The full URL to the output file (e.g., from find_output_url or wait_for_finish).
         save_path (str): The directory where the file should be saved. Defaults to current dir.
         filename (str, optional): The desired filename. If None, it attempts to extract
                                   from the URL or generates a unique name.
@@ -226,13 +230,67 @@ def download_output(output_url, save_path=".", filename=None):
     Raises:
         TimeoutError: If the download times out.
         ComfyAPIError: For HTTP errors or file system errors.
+        ValueError: If output_url is invalid.
     """
-    # If filename is provided, use it directly
-    if filename:
-         # Ensure save directory exists
-        os.makedirs(save_path, exist_ok=True)
-        full_path = os.path.join(save_path, filename)
-        return _download_output(output_url, full_path) # Pass full path to internal func
-    else:
-        # Let the internal function handle filename extraction/generation and saving
-        return _download_output(output_url, save_path)
+    if not output_url:
+        raise ValueError("output_url cannot be None or empty.")
+
+    full_path = None # Initialize full_path to ensure it's defined in case of early error
+    try:
+        # Only create the directory if a specific path (not "" or ".") is provided
+        if save_path and save_path != ".":
+            os.makedirs(save_path, exist_ok=True)
+
+        # Determine the target filename (user-provided or extracted)
+        target_filename = None
+        if filename:
+            target_filename = filename # Use user-provided name first
+        else:
+            # Attempt to extract filename from URL query parameters
+            try:
+                parsed_url = urllib.parse.urlparse(output_url)
+                query_params = urllib.parse.parse_qs(parsed_url.query)
+                extracted_filenames = query_params.get('filename', [])
+                if extracted_filenames:
+                    target_filename = extracted_filenames[0] # Get raw filename first
+            except Exception:
+                pass # Ignore parsing errors, will use fallback
+
+        # If no filename extracted or provided, generate a fallback
+        if not target_filename:
+            target_filename = f"output_{_generate_client_id()}.unknown"
+
+        # ***Crucially, sanitize the filename AFTER determining it***
+        # This ensures only the final component is used as the filename.
+        final_basename = os.path.basename(target_filename)
+
+        # Construct the full path: use only the basename if save_path is "" or "."
+        if not save_path or save_path == ".":
+            full_path = final_basename
+        else:
+            full_path = os.path.join(save_path, final_basename)
+        print(f"Saving to final path: {full_path}")
+
+        # Download the content
+        print(f"Downloading from {output_url} to {full_path}...")
+        response = requests.get(output_url, timeout=120) # Longer timeout for download
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+        # Save the file
+        with open(full_path, 'wb') as f:
+            f.write(response.content)
+        print(f"Output saved to: {full_path}")
+        return full_path
+
+    except requests.exceptions.Timeout:
+        raise TimeoutError(f"Timeout downloading output from {output_url}")
+    except requests.exceptions.MissingSchema:
+         raise ValueError(f"Invalid URL format (Missing Schema): {output_url}")
+    except requests.exceptions.RequestException as e:
+        raise ComfyAPIError(f"HTTP error downloading output from {output_url}: {e}")
+    except IOError as e:
+        # Ensure full_path is sensible before including in error message
+        path_str = full_path if full_path else save_path
+        raise ComfyAPIError(f"File system error saving output to {path_str}: {e}")
+    except Exception as e: # Catch any other unexpected errors
+        raise ComfyAPIError(f"An unexpected error occurred during download: {e}")

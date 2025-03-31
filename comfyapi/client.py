@@ -176,7 +176,7 @@ def _find_output_in_history(prompt_history):
 def _wait_for_finish_single(prompt_id, poll_interval=3, max_wait_time=600, status_callback=None):
     """
     Waits for a single prompt to finish by polling history.
-    Returns the full URL of the output image upon success.
+    Returns a tuple containing (filename, output_url) upon success.
     """
     base_url = _get_base_url()
     start_time = time.time()
@@ -195,10 +195,10 @@ def _wait_for_finish_single(prompt_id, poll_interval=3, max_wait_time=600, statu
             if filename:
                 print(f"Execution finished for {prompt_id}. Output filename: {filename}")
                 # Construct the URL here
-                output_url = f"{_get_base_url()}/view?filename={urllib.parse.quote(filename)}&type=output"
+                output_url = f"{base_url}/view?filename={urllib.parse.quote(filename)}&type=output"
                 print(f"Constructed output URL: {output_url}")
                 if status_callback: status_callback(prompt_id, "finished")
-                return output_url # Success! Return the full URL
+                return filename, output_url # Success! Return filename and URL tuple
 
             # Check for errors in history (less common than WebSocket errors)
             # Note: ComfyUI history API might not always populate error details here reliably.
@@ -284,18 +284,21 @@ def _batch_submit_internal(workflow, seed_node_path, seeds=None, num_seeds=None)
     return uids
 
 def _wait_and_get_all_outputs_internal(uids, status_callback=None):
-    """Waits for multiple UIDs and fetches their outputs concurrently."""
-    results = {}
-    errors = {}
+    """
+    Waits for multiple UIDs and fetches their outputs concurrently.
+    Returns results as a list of (filename, url) tuples and errors as a list of error objects/strings.
+    """
+    results_list = []
+    errors_list = [] # Changed from dict to list for errors
     threads = []
     result_queue = Queue() # Thread-safe queue for results/errors
 
     def worker(uid):
         try:
             if status_callback: status_callback(uid, "started")
-            filename = _wait_for_finish_single(uid, status_callback=status_callback)
-            output_url = f"{_get_base_url()}/view?filename={urllib.parse.quote(filename)}&type=output"
-            result_queue.put({'uid': uid, 'url': output_url, 'status': 'success'})
+            # _wait_for_finish_single now returns (filename, url)
+            filename, output_url = _wait_for_finish_single(uid, status_callback=status_callback)
+            result_queue.put({'uid': uid, 'filename': filename, 'url': output_url, 'status': 'success'})
         except Exception as e:
             print(f"Error processing UID {uid}: {e}")
             result_queue.put({'uid': uid, 'error': e, 'status': 'error'})
@@ -313,19 +316,19 @@ def _wait_and_get_all_outputs_internal(uids, status_callback=None):
     while not result_queue.empty():
         item = result_queue.get()
         if item['status'] == 'success':
-            results[item['uid']] = item['url']
+            # Append (filename, url) tuple to the list
+            results_list.append((item['filename'], item['url']))
         else:
-            errors[item['uid']] = item['error']
+            # Append the error object/string to the errors list
+            errors_list.append(item['error'])
 
-    if errors:
-        # Combine errors into a single message or structure
-        error_summary = {uid: str(err) for uid, err in errors.items()}
-        # Decide whether to raise an error or return partial results + errors
+    if errors_list:
+        # Log the errors that occurred
+        error_summary = [str(err) for err in errors_list]
         print(f"Errors occurred during batch processing: {error_summary}")
-        # Returning both successful results and errors
-        # raise ComfyAPIError(f"Errors occurred in batch: {error_summary}")
+        # Returning both successful results and the list of errors
 
-    return results, errors
+    return results_list, errors_list # Return list for results and list for errors
 
 
 # --- Public Function Wrappers (To be called from __init__.py) ---
@@ -342,28 +345,4 @@ def get_output_url(prompt_id):
      except ComfyAPIError as e:
          raise HistoryError(f"Could not get output URL for {prompt_id}: {e}")
 
-def download_output(output_url, save_path="."):
-    """Downloads content from the output URL and saves it."""
-    try:
-        response = requests.get(output_url, timeout=120) # Longer timeout for download
-        response.raise_for_status()
-
-        # Extract filename from URL or generate one
-        parsed_url = urllib.parse.urlparse(output_url)
-        query_params = urllib.parse.parse_qs(parsed_url.query)
-        filename = query_params.get('filename', [f"output_{_generate_client_id()}.unknown"])[0]
-
-        # Ensure save directory exists
-        os.makedirs(save_path, exist_ok=True)
-        full_path = os.path.join(save_path, filename)
-
-        with open(full_path, 'wb') as f:
-            f.write(response.content)
-        print(f"Output saved to: {full_path}")
-        return full_path
-    except requests.exceptions.Timeout:
-        raise TimeoutError(f"Timeout downloading output from {output_url}")
-    except requests.exceptions.RequestException as e:
-        raise ComfyAPIError(f"HTTP error downloading output from {output_url}: {e}")
-    except IOError as e:
-        raise ComfyAPIError(f"File system error saving output to {full_path}: {e}")
+# Removed internal _download_output function as logic is now consolidated in __init__.py

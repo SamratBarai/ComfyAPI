@@ -58,9 +58,9 @@ try:
     # def my_status_callback(pid, status):
     #     print(f"Job {pid}: {status}")
     # comfyapi.wait_for_finish(prompt_id, status_callback=my_status_callback)
-    # wait_for_finish now returns the URL directly
-    output_url = comfyapi.wait_for_finish(prompt_id)
-    print(f"Job finished. Output URL: {output_url}")
+    # wait_for_finish now returns (filename, url)
+    filename, output_url = comfyapi.wait_for_finish(prompt_id)
+    print(f"Job finished. Filename: {filename}, Output URL: {output_url}")
 
     # 6. Download the output image (find_output_url call is no longer needed here)
     if output_url:
@@ -108,30 +108,31 @@ try:
     # Optional status callback for batch progress
     def batch_status_update(uid, status):
          print(f"  Job {uid}: {status}")
-    # This function waits concurrently
-    results, errors = comfyapi.wait_and_get_all_outputs(uids, status_callback=batch_status_update)
+    # This function waits concurrently and returns (results_list, errors_list)
+    results_list, errors_list = comfyapi.wait_and_get_all_outputs(uids, status_callback=batch_status_update)
 
     print("\n--- Batch Results ---")
     # 6. Process successful results
-    if results:
+    if results_list:
         print("Successful jobs:")
-        for uid, output_url in results.items():
-            print(f"  UID: {uid}, Output URL: {output_url}")
+        # results_list contains (filename, output_url) tuples
+        for filename, output_url in results_list:
+            print(f"  Filename: {filename}, Output URL: {output_url}")
             # Download each image into the 'batch_output' folder using its original filename
             try:
-                # Call download_output without specifying a filename;
-                # it will extract the filename from the URL.
-                saved_path = comfyapi.download_output(output_url, save_path="batch_output")
+                # Pass the URL and the desired filename to download_output
+                saved_path = comfyapi.download_output(output_url, save_path="batch_output", filename=filename)
                 print(f"    Downloaded: {saved_path}")
             except comfyapi.ComfyAPIError as dl_e:
-                print(f"    Error downloading {uid} ({output_url}): {dl_e}")
+                print(f"    Error downloading {filename}: {dl_e}")
             time.sleep(0.1) # Small delay
 
     # 7. Report errors
-    if errors:
-        print("\nFailed jobs:")
-        for uid, error in errors.items():
-            print(f"  UID: {uid}, Error: {error}")
+    if errors_list:
+        print("\nFailed jobs/errors:")
+        # errors_list contains error objects/strings
+        for error in errors_list:
+            print(f"  Error: {error}")
 
 except comfyapi.ComfyAPIError as e:
     print(f"An API error occurred during batch processing: {e}")
@@ -151,9 +152,9 @@ except Exception as e:
 *   `edit_workflow(workflow, path, value)`
 *   `submit(workflow)`
 *   `batch_submit(workflow, seed_node_path, seeds=None, num_seeds=None)`
-*   `wait_for_finish(prompt_id, poll_interval=3, max_wait_time=600, status_callback=None)` (Returns output URL)
+*   `wait_for_finish(prompt_id, poll_interval=3, max_wait_time=600, status_callback=None)` (Returns `(filename, output_url)`)
 *   `find_output_url(prompt_id)` (Can still be used to check history for already completed jobs)
-*   `wait_and_get_all_outputs(uids, status_callback=None)`
+*   `wait_and_get_all_outputs(uids, status_callback=None)` (Returns `(results_list, errors_list)` where `results_list` is `[(filename, output_url), ...]`)
 *   `download_output(output_url, save_path=".", filename=None)`
 *   Exceptions: `ComfyAPIError`, `ConnectionError`, `QueueError`, `HistoryError`, `ExecutionError`, `TimeoutError`
 

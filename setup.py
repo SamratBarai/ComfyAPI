@@ -7,7 +7,7 @@ def read(fname):
 
 setup(
     name='comfyapi', # Changed name slightly to be more descriptive and likely unique
-    version='1.0.0', # Initial version
+    version='1.3.0', # Initial version
     author='Samrat', # Placeholder - User should replace
     author_email='baraisamrat20@gmail.com', # Placeholder - User should replace
     description='A Python client library for interacting with the ComfyUI API.',
