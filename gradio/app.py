@@ -5,28 +5,33 @@ import sys
 
 if len(sys.argv) > 1:
     BASE_URL = sys.argv[1]
-else: BASE_URL = "127.0.0.1:8188"
+else:
+    BASE_URL = "127.0.0.1:8188"
 
-com.set_base_url(BASE_URL)
+# Use the new ComfyAPIManager system
+manager = com.ComfyAPIManager()
+manager.set_base_url(BASE_URL)
+
+# Load workflow once at startup (if you want to reload every call, move this into main)
+WORKFLOW_PATH = "./workflow.json"
+manager.load_workflow(WORKFLOW_PATH)
 
 def main(prompt, height, width, seed, random_seed, steps, model):
-    workflow = com.load_workflow("./workflow.json")
-
-    workflow = com.edit_workflow(workflow, ["6", "inputs", "text"], prompt)
-    workflow = com.edit_workflow(workflow, ["5", "inputs", "height"], height)
-    workflow = com.edit_workflow(workflow, ["5", "inputs", "width"], width)
-
-    if random_seed == True:
+    # Always work on a fresh copy
+    manager.load_workflow(WORKFLOW_PATH)
+    manager.edit_workflow(["6", "inputs", "text"], prompt)
+    manager.edit_workflow(["5", "inputs", "height"], height)
+    manager.edit_workflow(["5", "inputs", "width"], width)
+    if random_seed:
         seed = random.randint(0, 9999999)
-    workflow = com.edit_workflow(workflow, ["3", "inputs", "seed"], seed)
+    manager.edit_workflow(["3", "inputs", "seed"], seed)
+    manager.edit_workflow(["3", "inputs", "steps"], steps)
+    manager.edit_workflow(["10", "inputs", "ckpt_name"], model)
 
-    workflow = com.edit_workflow(workflow, ["3", "inputs", "seed"], seed)
-    workflow = com.edit_workflow(workflow, ["3", "inputs", "steps"], steps)
-    workflow = com.edit_workflow(workflow, ["10", "inputs", "ckpt_name"], model)
-
-    uid = com.submit(workflow)
-    filename, url = com.wait_for_finish(uid)
-
+    prompt_id = manager.submit_workflow()
+    # Wait for finish (blocking)
+    manager.wait_for_finish(prompt_id)
+    url, filename = manager.find_output(prompt_id, with_filename=True)
     return url
 
 with gr.Blocks() as demo:

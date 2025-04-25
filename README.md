@@ -12,6 +12,12 @@ A Python client library for interacting with a running ComfyUI instance via its 
 *   Retrieve output image URLs.
 *   Download output images.
 *   Concurrent handling of batch jobs.
+*   Submit and manage workflows to a ComfyUI server
+*   Edit workflow parameters programmatically
+*   Batch (multi-image) submission with automatic or custom seeds
+*   Non-blocking status polling for workflow completion
+*   Download output images/files programmatically
+*   Designed for easy integration with automation tools and UIs (e.g., Gradio)
 
 ## Installation
 
@@ -76,7 +82,23 @@ except comfyapi.ComfyAPIError as e:
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
 
-```
+### Basic Example (ComfyAPIManager-based)
+
+```python
+from comfyapi import ComfyAPIManager
+
+manager = ComfyAPIManager()
+manager.set_base_url("http://127.0.0.1:8188")
+manager.load_workflow("path/to/your/workflow.json")
+manager.edit_workflow(["6", "inputs", "text"], "a cute anime girl")
+prompt_id = manager.submit_workflow()
+
+while not manager.check_queue(prompt_id):
+    print("Workflow running...")
+    time.sleep(1)
+
+output_url, filename = manager.find_output(prompt_id, with_filename=True)
+manager.download_output(output_url, save_path=".", filename=filename)
 
 ### Batch Example (Multiple Seeds - Automatic Generation)
 
@@ -141,7 +163,15 @@ except ValueError as e:
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
 
-```
+### Batch Example (ComfyAPIManager-based)
+
+```python
+uids = manager.batch_submit(num_seeds=3)
+for uid in uids:
+    while not manager.check_queue(uid):
+        time.sleep(1)
+    output_url, filename = manager.find_output(uid, with_filename=True)
+    manager.download_output(output_url, save_path=".", filename=filename)
 
 ## API Reference
 
@@ -157,6 +187,18 @@ except Exception as e:
 *   `wait_and_get_all_outputs(uids, status_callback=None)` (Returns `(results_list, errors_list)` where `results_list` is `[(filename, output_url), ...]`)
 *   `download_output(output_url, save_path=".", filename=None)`
 *   Exceptions: `ComfyAPIError`, `ConnectionError`, `QueueError`, `HistoryError`, `ExecutionError`, `TimeoutError`
+
+### ComfyAPIManager
+- `set_base_url(url)`
+- `load_workflow(filepath)`
+- `edit_workflow(path, value)`
+- `submit_workflow()`
+- `batch_submit(num_seeds=None, seeds=None, seed_node_path=[...])`
+- `check_queue(prompt_id)`
+- `find_output(prompt_id, with_filename=False)`
+- `wait_for_finish(prompt_id, ...)`
+- `wait_and_get_all_outputs(uids, ...)`
+- `download_output(output_url, save_path=".", filename=None)`
 
 ## Contributing
 
