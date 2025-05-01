@@ -1,5 +1,6 @@
 /.gradio
 /comfyapi.egg-info
 /.venv
+/example/web
 .env
 pypi_rec.txt
