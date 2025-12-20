@@ -97,7 +97,7 @@
   },
   "10": {
     "inputs": {
-      "ckpt_name": "Wai-NSFW-illustrious-SDXL.safetensors"
+      "ckpt_name": "WAI-ANI-HENTAI-PONYXL.safetensors"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {

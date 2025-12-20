@@ -2,6 +2,7 @@ import comfyapi as com
 import gradio as gr
 import random
 import sys
+import time
 
 # Ensure BASE_URL includes scheme
 if len(sys.argv) > 1:
@@ -34,10 +35,13 @@ def main(prompt, height, width, seed, random_seed, steps, model):
 
         prompt_id = manager.submit_workflow()
         # Wait for finish (blocking)
-        result = manager.wait_for_finish(prompt_id)
+        while not manager.check_queue(prompt_id):
+            print("Waiting for workflow to finish...")
+            time.sleep(1)
         url, filename = manager.find_output(prompt_id, with_filename=True)
         if url is None:
             return None, "No output image found."
+        print(f"Workflow finished successfully! Output URL: {url}")
         return url, None
     except Exception as e:
         return None, f"Error: {str(e)}"
@@ -67,7 +71,7 @@ with gr.Blocks(theme=gr.themes.Soft(), css=CUSTOM_CSS) as demo:
                 seed = gr.Slider(minimum=0, maximum=999999, value=0, label="Seed", interactive=True)
                 random_seed = gr.Checkbox(label="Randomize Seed", value=False)
             steps_slider = gr.Slider(minimum=1, maximum=150, value=20, label="Steps", interactive=True)
-            model = gr.Dropdown(choices=["WAI-ANI-Illustrious-PONYXL-v.13.safetensors", "Realistic_vision.safetensors"], label="Model", interactive=True)
+            model = gr.Dropdown(choices=["WAI-ANI-HENTAI-PONYXL.safetensors", "WAI-ANI-Illustrious-PONYXL-v.13.safetensors", "Realistic_vision.safetensors"], label="Model", interactive=True)
             submit_button = gr.Button("✨ Generate Image", elem_id="submit_btn")
         with gr.Column():
             output_image = gr.Image(label="Result", elem_id="output_img")
@@ -85,4 +89,4 @@ with gr.Blocks(theme=gr.themes.Soft(), css=CUSTOM_CSS) as demo:
         outputs=[output_image, error_box]
     )
 
-demo.launch()
+demo.launch(share=True)
