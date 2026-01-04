@@ -16,7 +16,6 @@ A Python client library for interacting with a running ComfyUI instance via its 
 ```bash
 pip install comfyapi # Or: pip install . if installing from local source
 ```
-*(Note: Package name on PyPI might differ if 'comfyapi-client' is taken. Check `setup.py`)*
 
 **Dependencies:**
 
