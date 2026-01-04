@@ -21,7 +21,8 @@ manager.edit_workflow(["6", "inputs", "text"], "A cute cat sitting on a sofa")
 
 # Update the image input using the new function
 # Node ID '10' is the Base64ImageLoader in workflw.json
-manager.set_base64_image(node_id="10", image_path=str(here / "example.png"))
+# Example: enforce a 300 KB maximum size and 800px maximum dimension
+manager.set_base64_image(node_id="10", image_path=str(here / "example.png"), max_size_bytes=300000, max_dimension=800)
 
 # Submit and wait
 prompt_id = manager.submit_workflow()

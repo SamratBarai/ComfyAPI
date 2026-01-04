@@ -21,8 +21,9 @@ pip install comfyapi # Or: pip install . if installing from local source
 
 *   `requests`
 *   `websocket-client`
+*   `Pillow` (optional, required for automatic image resizing)
 
-These will be installed automatically via pip.
+These will be installed automatically via pip (install `Pillow` if you plan to use image upload/resize features).
 
 ## Usage
 
@@ -102,10 +103,16 @@ After the helper nodes are available, you can encode and inject an image directl
 
 ```python
 # Example: node id '10' in examples/workflw.json is a Base64ImageLoader
+# The method will automatically downscale/recompress large images (default max 1MB and 1024px max dimension).
+# You can tune behavior with optional parameters `max_size_bytes` and `max_dimension`.
 manager.set_base64_image(node_id="10", image_path="examples/example.png")
+# Or specify limits explicitly:
+manager.set_base64_image(node_id="10", image_path="examples/example.png", max_size_bytes=300000, max_dimension=800)
 ```
 
 The supplied example workflow `examples/workflw.json` includes a `Base64ImageLoader` node (id `10`) configured to accept `image_base64`, `image_name`, and `image_path` inputs. Restart ComfyUI after adding custom nodes so the new node types are registered.
+
+Note: When large images are resized they are typically recompressed to JPEG to reduce payload size; this will flatten transparency (alpha channel) to a white background and the `image_name` may use a `.jpg` extension after processing.
 
 ---
 

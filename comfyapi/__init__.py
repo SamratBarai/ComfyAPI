@@ -168,32 +168,102 @@ class ComfyAPIManager:
     def download_output(self, output_url, save_path=".", filename=None):
         return _download_output(output_url, save_path=save_path, filename=filename)
     
-    def set_base64_image(self, node_id, image_path, temp_name=None):
+    def set_base64_image(self, node_id, image_path, temp_name=None, max_size_bytes=1000000, max_dimension=1024, jpeg_quality=85, min_quality=20):
         """
         Encodes a local image and injects it into a Base64ImageLoader node.
-        
+
+        This method will automatically resize and recompress large images so the base64 payload
+        remains reasonably small and quick to transmit. It requires Pillow (`pip install pillow`) to
+        perform image processing; if Pillow is not available, a helpful error is raised when resizing is needed.
+
         :param node_id: The ID of the node (string or int)
         :param image_path: Path to the local image file
         :param temp_name: Optional custom name for the file on the server
+        :param max_size_bytes: Maximum allowed size in bytes for the encoded image (default 1,000,000)
+        :param max_dimension: Maximum width/height for the image in pixels (default 1024)
+        :param jpeg_quality: Starting JPEG quality for recompression (default 85)
+        :param min_quality: Minimum JPEG quality to attempt before further resizing (default 20)
         """
         if not os.path.isfile(image_path):
             raise FileNotFoundError(f"Local image not found at: {image_path}")
 
-        # 1. Encode image to base64
-        with open(image_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+        original_size = os.path.getsize(image_path)
+        processed_bytes = None
+        final_temp_name = temp_name or os.path.basename(image_path)
 
-        # 2. Determine temporary name
-        if temp_name is None:
-            temp_name = os.path.basename(image_path)
+        # If the file is already small enough, use it directly
+        if original_size <= max_size_bytes:
+            with open(image_path, "rb") as image_file:
+                processed_bytes = image_file.read()
+        else:
+            # Try to import Pillow for processing
+            try:
+                from PIL import Image
+            except Exception:
+                raise ComfyAPIError("Pillow is required to resize large images. Install with `pip install pillow`")
+
+            from io import BytesIO
+
+            try:
+                img = Image.open(image_path)
+            except Exception as e:
+                raise ComfyAPIError(f"Failed to open image for processing: {e}")
+
+            # Handle alpha channels by converting to RGB with white background
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                background.paste(img, mask=img.split()[-1])
+                img = background
+            else:
+                img = img.convert("RGB")
+
+            width, height = img.size
+            # Initial resize if either dimension exceeds max_dimension
+            if max(width, height) > max_dimension:
+                scale = max_dimension / float(max(width, height))
+                new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+                img = img.resize(new_size, Image.LANCZOS)
+                width, height = img.size
+
+            # Try compressing at decreasing quality until under max_size_bytes
+            quality = jpeg_quality
+            buffer = BytesIO()
+            img.save(buffer, format="JPEG", quality=quality, optimize=True)
+            data = buffer.getvalue()
+
+            # Iteratively reduce quality first
+            while len(data) > max_size_bytes and quality >= min_quality:
+                quality -= 5
+                buffer = BytesIO()
+                img.save(buffer, format="JPEG", quality=max(min_quality, quality), optimize=True)
+                data = buffer.getvalue()
+
+            # If still too large, progressively downscale dimensions and retry
+            while len(data) > max_size_bytes and max(img.size) > 128:
+                new_size = (max(1, int(img.size[0] * 0.8)), max(1, int(img.size[1] * 0.8)))
+                img = img.resize(new_size, Image.LANCZOS)
+                buffer = BytesIO()
+                img.save(buffer, format="JPEG", quality=max(min_quality, quality), optimize=True)
+                data = buffer.getvalue()
+
+            processed_bytes = data
+            # Ensure temp name reflects JPEG output
+            final_temp_name = os.path.splitext(final_temp_name)[0] + ".jpg"
+
+        # Fallback if something went wrong
+        if processed_bytes is None:
+            raise ComfyAPIError("Failed to prepare image bytes for base64 encoding.")
+
+        # Encode to base64
+        encoded_string = base64.b64encode(processed_bytes).decode('utf-8')
 
         # 3. Use edit_workflow to update the node's input fields
-        # This matches your existing logic: manager.edit_workflow(["ID", "inputs", "key"], value)
         node_id_str = str(node_id)
-        
+
         # Set the base64 string
         self.edit_workflow([node_id_str, "inputs", "image_base64"], encoded_string)
-        
+
         # Set the metadata fields
-        self.edit_workflow([node_id_str, "inputs", "image_name"], temp_name)
+        self.edit_workflow([node_id_str, "inputs", "image_name"], final_temp_name)
+        # Note: image_path is set to the original path for traceability
         self.edit_workflow([node_id_str, "inputs", "image_path"], image_path)

@@ -1,5 +1,5 @@
 from comfyapi import ComfyAPIManager
-import time
+from pathlib import Path
 
 # Initialize manager
 manager = ComfyAPIManager()
@@ -7,7 +7,6 @@ manager = ComfyAPIManager()
 # Set Base Url (update as needed)
 manager.set_base_url("http://127.0.0.1:8188")
 
-from pathlib import Path
 here = Path(__file__).parent
 
 # Load workflow (relative path)
