@@ -14,7 +14,7 @@ A Python client library for interacting with a running ComfyUI instance via its 
 ## Installation
 
 ```bash
-pip install comfyapi-client # Or: pip install . if installing from local source
+pip install comfyapi # Or: pip install . if installing from local source
 ```
 *(Note: Package name on PyPI might differ if 'comfyapi-client' is taken. Check `setup.py`)*
 
@@ -89,6 +89,27 @@ for uid, (output_url, filename) in results.items():
     manager.download_output(output_url, save_path="batch_output", filename=filename)
     print(f"Downloaded {filename}")
 print("All downloads complete.")
+
+### Image Uploads (Base64) 🔧
+
+To inject local images into a workflow using the **Base64ImageLoader** node, clone the helper nodes into your ComfyUI `custom_nodes` folder and restart ComfyUI:
+
+```bash
+# Example (replace with your ComfyUI custom_nodes path)
+git clone https://github.com/SamratBarai/ComfyAPI_helper <COMFYUI_CUSTOM_NODES_DIR>/ComfyAPI_helper
+```
+
+After the helper nodes are available, you can encode and inject an image directly into your workflow using `ComfyAPIManager.set_base64_image`:
+
+```python
+# Example: node id '10' in examples/workflw.json is a Base64ImageLoader
+manager.set_base64_image(node_id="10", image_path="examples/example.png")
+```
+
+The supplied example workflow `examples/workflw.json` includes a `Base64ImageLoader` node (id `10`) configured to accept `image_base64`, `image_name`, and `image_path` inputs. Restart ComfyUI after adding custom nodes so the new node types are registered.
+
+---
+
 ```
 
 ### Legacy API (Functional, Not Recommended)
@@ -119,6 +140,7 @@ comfyapi.download_output(output_url, save_path="output_images")
 - `wait_for_finish(prompt_id, poll_interval=3, max_wait_time=600, status_callback=None)`
 - `wait_and_get_all_outputs(uids, status_callback=None)`
 - `download_output(output_url, save_path=".", filename=None)`
+- `set_base64_image(node_id, image_path, temp_name=None)`
 
 ### Exceptions
 - `ComfyAPIError`, `ConnectionError`, `QueueError`, `HistoryError`, `ExecutionError`, `TimeoutError`
@@ -130,7 +152,7 @@ comfyapi.download_output(output_url, save_path="output_images")
 
 ## Contributing
 
-*(TODO: Add contribution guidelines if desired)*
+*(TODO: Add contribution guidelines)*
 
 ## License
 

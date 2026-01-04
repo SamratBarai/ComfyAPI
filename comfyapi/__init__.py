@@ -2,6 +2,7 @@ import json
 import copy
 import os
 import urllib
+import base64
 
 # Import core functions and exceptions from the client module
 from .client import (
@@ -166,3 +167,33 @@ class ComfyAPIManager:
 
     def download_output(self, output_url, save_path=".", filename=None):
         return _download_output(output_url, save_path=save_path, filename=filename)
+    
+    def set_base64_image(self, node_id, image_path, temp_name=None):
+        """
+        Encodes a local image and injects it into a Base64ImageLoader node.
+        
+        :param node_id: The ID of the node (string or int)
+        :param image_path: Path to the local image file
+        :param temp_name: Optional custom name for the file on the server
+        """
+        if not os.path.isfile(image_path):
+            raise FileNotFoundError(f"Local image not found at: {image_path}")
+
+        # 1. Encode image to base64
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+
+        # 2. Determine temporary name
+        if temp_name is None:
+            temp_name = os.path.basename(image_path)
+
+        # 3. Use edit_workflow to update the node's input fields
+        # This matches your existing logic: manager.edit_workflow(["ID", "inputs", "key"], value)
+        node_id_str = str(node_id)
+        
+        # Set the base64 string
+        self.edit_workflow([node_id_str, "inputs", "image_base64"], encoded_string)
+        
+        # Set the metadata fields
+        self.edit_workflow([node_id_str, "inputs", "image_name"], temp_name)
+        self.edit_workflow([node_id_str, "inputs", "image_path"], image_path)

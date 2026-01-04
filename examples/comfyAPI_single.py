@@ -4,32 +4,29 @@ import time
 # Initialize manager
 manager = ComfyAPIManager()
 
-# Set Base Url
-manager.set_base_url("https://8188-01jytw51fgcf33my2r0zbx0mrm.cloudspaces.litng.ai/")
+# Set Base Url (update as needed)
+manager.set_base_url("http://127.0.0.1:8188")
 
-# Load workflow
-manager.load_workflow("E:\projects\softwares\ComfyAPI - Class\examples\gradio\workflow.json")
+from pathlib import Path
+here = Path(__file__).parent
+
+# Load workflow (relative path)
+manager.load_workflow(str(here / "workflw.json"))
 
 # Edit workflow
-manager.edit_workflow(["6", "inputs", "text"], "a professional photo of a bikini anime girl fucked by another man")
+manager.edit_workflow(["6", "inputs", "text"], "a professional photo of a person in a studio")
 manager.edit_workflow(["3", "inputs", "seed"], 123456789)
 
 # Submit workflow
 prompt_id = manager.submit_workflow()
 
-# Waiting until completion
+# Wait for completion (use wait_for_finish which returns (filename, url))
 print(f"Prompt submitted with id: {prompt_id}. Waiting for completion...")
-while not manager.check_queue(prompt_id):
-    print("Workflow still running...")
-    time.sleep(1)  # Poll every 1 second
-
-print("Workflow finished!")
-
-# Find output
-output_url, filename = manager.find_output(prompt_id, with_filename=True)
+filename, output_url = manager.wait_for_finish(prompt_id)
+print(f"Workflow finished! Output: {filename} -> {output_url}")
 
 # Download output
-print(f"Output URL: {output_url}")
-print(f"Output filename: {filename}")
-manager.download_output(output_url, save_path="./images/", filename=filename)
+out_dir = here / "images"
+out_dir.mkdir(parents=True, exist_ok=True)
+manager.download_output(output_url, save_path=str(out_dir), filename=filename)
 print("Download complete.")

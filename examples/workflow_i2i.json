@@ -1,12 +1,12 @@
 {
   "3": {
     "inputs": {
-      "seed": 234304192239583,
+      "seed": 84163234319873,
       "steps": 20,
       "cfg": 8,
       "sampler_name": "euler",
       "scheduler": "normal",
-      "denoise": 1,
+      "denoise": 0.9,
       "model": [
         "4",
         0
@@ -20,7 +20,7 @@
         0
       ],
       "latent_image": [
-        "5",
+        "11",
         0
       ]
     },
@@ -31,27 +31,16 @@
   },
   "4": {
     "inputs": {
-      "ckpt_name": "WAI-ANI-Illustrious-PONYXL-v.13.safetensors"
+      "ckpt_name": "WAI-ANI-NSFW-PONYXL.safetensors"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
       "title": "Load Checkpoint"
     }
   },
-  "5": {
-    "inputs": {
-      "width": 768,
-      "height": 768,
-      "batch_size": 1
-    },
-    "class_type": "EmptyLatentImage",
-    "_meta": {
-      "title": "Empty Latent Image"
-    }
-  },
   "6": {
     "inputs": {
-      "text": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+      "text": "a girl",
       "clip": [
         "4",
         1
@@ -93,7 +82,7 @@
   },
   "9": {
     "inputs": {
-      "filename_prefix": "TEST",
+      "filename_prefix": "ComfyUI",
       "images": [
         "8",
         0
@@ -102,6 +91,33 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
+    }
+  },
+  "10": {
+    "inputs": {
+      "image_base64": "",
+      "image_name": "input_image.png",
+      "image_path": ""
+    },
+    "class_type": "Base64ImageLoader",
+    "_meta": {
+      "title": "Base64 Image Loader"
+    }
+  },
+  "11": {
+    "inputs": {
+      "pixels": [
+        "10",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
     }
   }
 }

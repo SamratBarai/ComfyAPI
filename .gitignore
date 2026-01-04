@@ -2,5 +2,7 @@
 /comfyapi.egg-info
 /.venv
 /example/web
+/results
 .env
 pypi_rec.txt
+prompt.md
