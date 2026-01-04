@@ -1,14 +1,14 @@
 {
   "3": {
     "inputs": {
-      "seed": 196956604295177,
+      "seed": 84163234319873,
       "steps": 20,
       "cfg": 8,
       "sampler_name": "euler",
       "scheduler": "normal",
-      "denoise": 1,
+      "denoise": 0.9,
       "model": [
-        "10",
+        "4",
         0
       ],
       "positive": [
@@ -20,7 +20,7 @@
         0
       ],
       "latent_image": [
-        "5",
+        "11",
         0
       ]
     },
@@ -29,22 +29,20 @@
       "title": "KSampler"
     }
   },
-  "5": {
+  "4": {
     "inputs": {
-      "width": 1024,
-      "height": 1024,
-      "batch_size": 1
+      "ckpt_name": "WAI-ANI-NSFW-PONYXL.safetensors"
     },
-    "class_type": "EmptyLatentImage",
+    "class_type": "CheckpointLoaderSimple",
     "_meta": {
-      "title": "Empty Latent Image"
+      "title": "Load Checkpoint"
     }
   },
   "6": {
     "inputs": {
-      "text": "a green monster fucking a sexy anime girl in doggy pose, the moster is pressing the girl's boobs from behind and fucking her hard, she has massive boobs that are tripping out of her bra tearing it apart, cum splashing out of her pussy",
+      "text": "a girl",
       "clip": [
-        "10",
+        "4",
         1
       ]
     },
@@ -55,9 +53,9 @@
   },
   "7": {
     "inputs": {
-      "text": "text, watermark, no arms, extra arms, deformed",
+      "text": "text, watermark",
       "clip": [
-        "10",
+        "4",
         1
       ]
     },
@@ -73,7 +71,7 @@
         0
       ],
       "vae": [
-        "10",
+        "4",
         2
       ]
     },
@@ -97,11 +95,29 @@
   },
   "10": {
     "inputs": {
-      "ckpt_name": "Wai-NSFW-illustrious-SDXL.safetensors"
+      "image_base64": "",
+      "image_name": "input_image.png",
+      "image_path": ""
     },
-    "class_type": "CheckpointLoaderSimple",
+    "class_type": "Base64ImageLoader",
     "_meta": {
-      "title": "Load Checkpoint"
+      "title": "Base64 Image Loader"
+    }
+  },
+  "11": {
+    "inputs": {
+      "pixels": [
+        "10",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
     }
   }
 }

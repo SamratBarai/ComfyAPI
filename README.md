@@ -5,162 +5,160 @@ A Python client library for interacting with a running ComfyUI instance via its 
 ## Features
 
 *   Load ComfyUI workflow JSON files.
-*   Edit workflow parameters (prompts, seeds, dimensions, etc.).
-*   Submit single workflows for execution.
-*   Submit batches of workflows with varying seeds.
-*   Wait for job completion (single or batch).
-*   Retrieve output image URLs.
-*   Download output images.
-*   Concurrent handling of batch jobs.
+*   Edit workflow parameters (prompts, seeds, dimensions, etc.) programmatically.
+*   Submit single or batch workflows for execution.
+*   Wait for job completion (single or batch) with non-blocking polling.
+*   Retrieve output image URLs and download outputs.
+*   Designed for automation, scripting, and integration with UIs (e.g., Gradio, Flask).
 
 ## Installation
 
 ```bash
-pip install comfyapi-client # Or: pip install . if installing from local source
+pip install comfyapi # Or: pip install . if installing from local source
 ```
-*(Note: Package name on PyPI might differ if 'comfyapi-client' is taken. Check `setup.py`)*
 
 **Dependencies:**
 
 *   `requests`
 *   `websocket-client`
+*   `Pillow` (optional, required for automatic image resizing)
 
-These will be installed automatically via pip.
+These will be installed automatically via pip (install `Pillow` if you plan to use image upload/resize features).
 
 ## Usage
 
-### Basic Example (Single Image)
+### Recommended: ComfyAPIManager (Single & Batch)
 
 ```python
-import comfyapi
-
-# 1. Set the URL of your ComfyUI server
-comfyapi.set_base_url("http://127.0.0.1:8188") # Replace with your server URL
-
-# 2. Load your workflow file
-workflow = comfyapi.load_workflow("path/to/your/workflow.json")
-
-# 3. Modify workflow parameters (optional)
-# Example: Change positive prompt (assuming node "6" is the positive prompt node)
-workflow = comfyapi.edit_workflow(workflow, ["6", "inputs", "text"], "a beautiful landscape painting")
-# Example: Change seed (assuming node "3" is the KSampler seed input)
-workflow = comfyapi.edit_workflow(workflow, ["3", "inputs", "seed"], 12345)
-
-try:
-    # 4. Submit the workflow
-    print("Submitting workflow...")
-    prompt_id = comfyapi.submit(workflow)
-    print(f"Workflow submitted. Prompt ID: {prompt_id}")
-
-    # 5. Wait for the job to finish
-    print("Waiting for job to finish...")
-    # You can optionally provide a status callback function:
-    # def my_status_callback(pid, status):
-    #     print(f"Job {pid}: {status}")
-    # comfyapi.wait_for_finish(prompt_id, status_callback=my_status_callback)
-    # wait_for_finish now returns (filename, url)
-    filename, output_url = comfyapi.wait_for_finish(prompt_id)
-    print(f"Job finished. Filename: {filename}, Output URL: {output_url}")
-
-    # 6. Download the output image (find_output_url call is no longer needed here)
-    if output_url:
-        print("Downloading output...")
-        # Saves to current directory with filename from URL
-        saved_path = comfyapi.download_output(output_url, save_path="output_images")
-        # Or specify a filename:
-        # saved_path = comfyapi.download_output(output_url, save_path="output_images", filename="my_image.png")
-        print(f"Image saved to: {saved_path}")
-
-except comfyapi.ComfyAPIError as e:
-    print(f"An API error occurred: {e}")
-except Exception as e:
-    print(f"An unexpected error occurred: {e}")
-
-```
-
-### Batch Example (Multiple Seeds - Automatic Generation)
-
-```python
-import comfyapi
+from comfyapi import ComfyAPIManager
 import time
 
-# 1. Set the URL
-comfyapi.set_base_url("http://127.0.0.1:8188")
+manager = ComfyAPIManager()
+manager.set_base_url("http://127.0.0.1:8188")
+manager.load_workflow("path/to/your/workflow.json")
 
-# 2. Load workflow
-workflow = comfyapi.load_workflow("path/to/your/workflow.json")
+# Edit workflow parameters (example: prompt and seed)
+manager.edit_workflow(["6", "inputs", "text"], "a beautiful landscape painting")
+manager.edit_workflow(["3", "inputs", "seed"], 123456)
 
-# 3. Define number of seeds and the path to the seed node
-num_images_to_generate = 5
-# IMPORTANT: Update this path based on your specific workflow JSON structure!
-# Find the node that takes the seed (e.g., KSampler) and its input name.
-seed_node_path = ["3", "inputs", "seed"] # Example: Node "3", input named "seed"
+# Submit workflow
+prompt_id = manager.submit_workflow()
 
-try:
-    # 4. Submit the batch using num_seeds for automatic seed generation
-    print(f"Submitting batch for {num_images_to_generate} images (random seeds)...")
-    # Provide num_seeds instead of an explicit seeds list
-    uids = comfyapi.batch_submit(workflow, seed_node_path, num_seeds=num_images_to_generate)
-    print(f"Batch submitted. UIDs: {uids}")
+# Wait for completion
+while not manager.check_queue(prompt_id):
+    print("Workflow running...")
+    time.sleep(1)
+print("Workflow finished!")
 
-    # 5. Wait for all jobs and get results
-    print("Waiting for all jobs to finish...")
-    # Optional status callback for batch progress
-    def batch_status_update(uid, status):
-         print(f"  Job {uid}: {status}")
-    # This function waits concurrently and returns (results_list, errors_list)
-    results_list, errors_list = comfyapi.wait_and_get_all_outputs(uids, status_callback=batch_status_update)
+# Retrieve and download output
+output_url, filename = manager.find_output(prompt_id, with_filename=True)
+manager.download_output(output_url, save_path="output_images", filename=filename)
+```
 
-    print("\n--- Batch Results ---")
-    # 6. Process successful results
-    if results_list:
-        print("Successful jobs:")
-        # results_list contains (filename, output_url) tuples
-        for filename, output_url in results_list:
-            print(f"  Filename: {filename}, Output URL: {output_url}")
-            # Download each image into the 'batch_output' folder using its original filename
-            try:
-                # Pass the URL and the desired filename to download_output
-                saved_path = comfyapi.download_output(output_url, save_path="batch_output", filename=filename)
-                print(f"    Downloaded: {saved_path}")
-            except comfyapi.ComfyAPIError as dl_e:
-                print(f"    Error downloading {filename}: {dl_e}")
-            time.sleep(0.1) # Small delay
+### Batch Example (Multiple Images, Automatic Seeds)
 
-    # 7. Report errors
-    if errors_list:
-        print("\nFailed jobs/errors:")
-        # errors_list contains error objects/strings
-        for error in errors_list:
-            print(f"  Error: {error}")
+```python
+# Number of images to generate
+num_images = 5
+# Path to the seed input in your workflow (update as needed)
+seed_node_path = ["3", "inputs", "seed"]
 
-except comfyapi.ComfyAPIError as e:
-    print(f"An API error occurred during batch processing: {e}")
-except ValueError as e:
-     print(f"Configuration error: {e}") # e.g., invalid seed path
-except Exception as e:
-    print(f"An unexpected error occurred: {e}")
+uids = manager.batch_submit(num_seeds=num_images, seed_node_path=seed_node_path)
+print(f"Batch submitted. Prompt IDs: {uids}")
+
+# Wait for all jobs to finish
+pending = set(uids)
+results = {}
+while pending:
+    finished = []
+    for uid in list(pending):
+        if manager.check_queue(uid):
+            output_url, filename = manager.find_output(uid, with_filename=True)
+            results[uid] = (output_url, filename)
+            print(f"Prompt {uid} finished! Output: {filename}")
+            finished.append(uid)
+    for uid in finished:
+        pending.remove(uid)
+    if pending:
+        print(f"Waiting for {len(pending)} jobs...")
+        time.sleep(1)
+
+# Download all outputs
+for uid, (output_url, filename) in results.items():
+    print(f"Downloading {filename} from {output_url}")
+    manager.download_output(output_url, save_path="batch_output", filename=filename)
+    print(f"Downloaded {filename}")
+print("All downloads complete.")
+
+### Image Uploads (Base64) 🔧
+
+To inject local images into a workflow using the **Base64ImageLoader** node, clone the helper nodes into your ComfyUI `custom_nodes` folder and restart ComfyUI:
+
+```bash
+# Example (replace with your ComfyUI custom_nodes path)
+git clone https://github.com/SamratBarai/ComfyAPI_helper <COMFYUI_CUSTOM_NODES_DIR>/ComfyAPI_helper
+```
+
+After the helper nodes are available, you can encode and inject an image directly into your workflow using `ComfyAPIManager.set_base64_image`:
+
+```python
+# Example: node id '10' in examples/workflw.json is a Base64ImageLoader
+# The method will automatically downscale/recompress large images (default max 1MB and 1024px max dimension).
+# You can tune behavior with optional parameters `max_size_bytes` and `max_dimension`.
+manager.set_base64_image(node_id="10", image_path="examples/example.png")
+# Or specify limits explicitly:
+manager.set_base64_image(node_id="10", image_path="examples/example.png", max_size_bytes=300000, max_dimension=800)
+```
+
+The supplied example workflow `examples/workflw.json` includes a `Base64ImageLoader` node (id `10`) configured to accept `image_base64`, `image_name`, and `image_path` inputs. Restart ComfyUI after adding custom nodes so the new node types are registered.
+
+Note: When large images are resized they are typically recompressed to JPEG to reduce payload size; this will flatten transparency (alpha channel) to a white background and the `image_name` may use a `.jpg` extension after processing.
+
+---
 
 ```
 
-## API Reference
+### Legacy API (Functional, Not Recommended)
 
-*(TODO: Add detailed descriptions of public functions and exceptions here)*
+```python
+import comfyapi
 
-*   `set_base_url(url)`
-*   `load_workflow(filepath)`
-*   `edit_workflow(workflow, path, value)`
-*   `submit(workflow)`
-*   `batch_submit(workflow, seed_node_path, seeds=None, num_seeds=None)`
-*   `wait_for_finish(prompt_id, poll_interval=3, max_wait_time=600, status_callback=None)` (Returns `(filename, output_url)`)
-*   `find_output_url(prompt_id)` (Can still be used to check history for already completed jobs)
-*   `wait_and_get_all_outputs(uids, status_callback=None)` (Returns `(results_list, errors_list)` where `results_list` is `[(filename, output_url), ...]`)
-*   `download_output(output_url, save_path=".", filename=None)`
-*   Exceptions: `ComfyAPIError`, `ConnectionError`, `QueueError`, `HistoryError`, `ExecutionError`, `TimeoutError`
+comfyapi.set_base_url("http://127.0.0.1:8188")
+workflow = comfyapi.load_workflow("path/to/your/workflow.json")
+workflow = comfyapi.edit_workflow(workflow, ["6", "inputs", "text"], "a beautiful landscape painting")
+workflow = comfyapi.edit_workflow(workflow, ["3", "inputs", "seed"], 12345)
+
+prompt_id = comfyapi.submit(workflow)
+filename, output_url = comfyapi.wait_for_finish(prompt_id)
+comfyapi.download_output(output_url, save_path="output_images")
+```
+
+## API Reference (Key Methods)
+
+### ComfyAPIManager
+- `set_base_url(url)`
+- `load_workflow(filepath)`
+- `edit_workflow(path, value)`
+- `submit_workflow()`
+- `batch_submit(num_seeds=None, seeds=None, seed_node_path=[...])`
+- `check_queue(prompt_id)`
+- `find_output(prompt_id, with_filename=False)`
+- `wait_for_finish(prompt_id, poll_interval=3, max_wait_time=600, status_callback=None)`
+- `wait_and_get_all_outputs(uids, status_callback=None)`
+- `download_output(output_url, save_path=".", filename=None)`
+- `set_base64_image(node_id, image_path, temp_name=None)`
+
+### Exceptions
+- `ComfyAPIError`, `ConnectionError`, `QueueError`, `HistoryError`, `ExecutionError`, `TimeoutError`
+
+## Notes
+- Always update the seed node path based on your workflow structure.
+- All editing is non-destructive: the workflow is copied and updated in memory.
+- Use the Manager for all new scripts and integrations.
 
 ## Contributing
 
-*(TODO: Add contribution guidelines if desired)*
+*(TODO: Add contribution guidelines)*
 
 ## License
 

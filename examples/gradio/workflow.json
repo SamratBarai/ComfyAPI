@@ -1,14 +1,14 @@
 {
   "3": {
     "inputs": {
-      "seed": 234304192239583,
+      "seed": 196956604295177,
       "steps": 20,
       "cfg": 8,
       "sampler_name": "euler",
       "scheduler": "normal",
       "denoise": 1,
       "model": [
-        "4",
+        "10",
         0
       ],
       "positive": [
@@ -29,19 +29,10 @@
       "title": "KSampler"
     }
   },
-  "4": {
-    "inputs": {
-      "ckpt_name": "WAI-ANI-Illustrious-PONYXL-v.13.safetensors"
-    },
-    "class_type": "CheckpointLoaderSimple",
-    "_meta": {
-      "title": "Load Checkpoint"
-    }
-  },
   "5": {
     "inputs": {
-      "width": 768,
-      "height": 768,
+      "width": 1024,
+      "height": 1024,
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
@@ -51,9 +42,9 @@
   },
   "6": {
     "inputs": {
-      "text": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+      "text": "a green monster fucking a sexy anime girl in doggy pose, the moster is pressing the girl's boobs from behind and fucking her hard, she has massive boobs that are tripping out of her bra tearing it apart, cum splashing out of her pussy",
       "clip": [
-        "4",
+        "10",
         1
       ]
     },
@@ -64,9 +55,9 @@
   },
   "7": {
     "inputs": {
-      "text": "text, watermark",
+      "text": "text, watermark, no arms, extra arms, deformed",
       "clip": [
-        "4",
+        "10",
         1
       ]
     },
@@ -82,7 +73,7 @@
         0
       ],
       "vae": [
-        "4",
+        "10",
         2
       ]
     },
@@ -93,7 +84,7 @@
   },
   "9": {
     "inputs": {
-      "filename_prefix": "TEST",
+      "filename_prefix": "ComfyUI",
       "images": [
         "8",
         0
@@ -102,6 +93,15 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
+    }
+  },
+  "10": {
+    "inputs": {
+      "ckpt_name": "WAI-ANI-HENTAI-PONYXL.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
     }
   }
 }

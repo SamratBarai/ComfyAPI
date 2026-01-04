@@ -57,6 +57,47 @@ def _generate_client_id():
     """Generates a unique client ID."""
     return str(random.randint(1000000000, 9999999999)) # Increased range
 
+def _find_output(prompt_id):
+    """
+    Finds the output image URL and filename for a completed job by checking its history.
+    Returns (url, filename) or (None, None) if not found.
+    """
+    history = _get_history(prompt_id)
+    filename = _find_output_in_history(history)
+    if filename:
+        base_url = _get_base_url()
+        encoded_filename = urllib.parse.quote(filename)
+        url = f"{base_url}/view?filename={encoded_filename}&type=output"
+        return url, filename
+    return None, None
+
+def _find_output_url(prompt_id):
+    url, _ = _find_output(prompt_id)
+    return url
+
+def _find_output_in_history(prompt_history):
+    """Parses history to find output images/files."""
+    # print(f"[_find_output_in_history] Processing history: {prompt_history}") # DEBUG REMOVED
+    if not prompt_history or 'outputs' not in prompt_history:
+        # print("[_find_output_in_history] History empty or missing 'outputs' key.") # DEBUG REMOVED
+        return None # Not finished or no outputs
+
+    outputs = prompt_history['outputs']
+    # Iterate through nodes to find the first image output
+    # Assumes the desired output is an image; might need adjustment for other types
+    for node_id, node_output in outputs.items():
+        # print(f"[_find_output_in_history] Checking node {node_id}: {node_output}") # DEBUG REMOVED
+        if 'images' in node_output:
+            # print(f"[_find_output_in_history] Found 'images' in node {node_id}: {node_output['images']}") # DEBUG REMOVED
+            for image_data in node_output['images']:
+                # print(f"[_find_output_in_history] Checking image data: {image_data}") # DEBUG REMOVED
+                # Check for standard output fields
+                if image_data.get('type') == 'output' and 'filename' in image_data:
+                    # print(f"[_find_output_in_history] Found output filename: {image_data['filename']}") # DEBUG REMOVED
+                    return image_data['filename'] # Returns filename if found
+    # print("[_find_output_in_history] No suitable output image found in history.") # DEBUG REMOVED
+    return None # No image output found
+
 # --- State Management ---
 
 def set_base_url(url):
@@ -150,29 +191,6 @@ def _get_history(prompt_id):
         print(f"Failed to decode JSON history response from {url}")
         return None # Allow polling to retry
 
-def _find_output_in_history(prompt_history):
-    """Parses history to find output images/files."""
-    # print(f"[_find_output_in_history] Processing history: {prompt_history}") # DEBUG REMOVED
-    if not prompt_history or 'outputs' not in prompt_history:
-        # print("[_find_output_in_history] History empty or missing 'outputs' key.") # DEBUG REMOVED
-        return None # Not finished or no outputs
-
-    outputs = prompt_history['outputs']
-    # Iterate through nodes to find the first image output
-    # Assumes the desired output is an image; might need adjustment for other types
-    for node_id, node_output in outputs.items():
-        # print(f"[_find_output_in_history] Checking node {node_id}: {node_output}") # DEBUG REMOVED
-        if 'images' in node_output:
-            # print(f"[_find_output_in_history] Found 'images' in node {node_id}: {node_output['images']}") # DEBUG REMOVED
-            for image_data in node_output['images']:
-                # print(f"[_find_output_in_history] Checking image data: {image_data}") # DEBUG REMOVED
-                # Check for standard output fields
-                if image_data.get('type') == 'output' and 'filename' in image_data:
-                    # print(f"[_find_output_in_history] Found output filename: {image_data['filename']}") # DEBUG REMOVED
-                    return image_data['filename'] # Returns filename if found
-    # print("[_find_output_in_history] No suitable output image found in history.") # DEBUG REMOVED
-    return None # No image output found
-
 def _wait_for_finish_single(prompt_id, poll_interval=3, max_wait_time=600, status_callback=None):
     """
     Waits for a single prompt to finish by polling history.
@@ -195,7 +213,7 @@ def _wait_for_finish_single(prompt_id, poll_interval=3, max_wait_time=600, statu
             if filename:
                 print(f"Execution finished for {prompt_id}. Output filename: {filename}")
                 # Construct the URL here
-                output_url = f"{base_url}/view?filename={urllib.parse.quote(filename)}&type=output"
+                output_url, _ = _find_output(prompt_id)
                 print(f"Constructed output URL: {output_url}")
                 if status_callback: status_callback(prompt_id, "finished")
                 return filename, output_url # Success! Return filename and URL tuple
@@ -340,9 +358,88 @@ def get_output_url(prompt_id):
      # For simplicity now, assume wait_for_finish returns the filename
      try:
          filename = _wait_for_finish_single(prompt_id) # Re-poll if needed, or retrieve stored result
-         url = f"{_get_base_url()}/view?filename={urllib.parse.quote(filename)}&type=output"
+         url, _ = _find_output(prompt_id)
          return url
      except ComfyAPIError as e:
          raise HistoryError(f"Could not get output URL for {prompt_id}: {e}")
 
-# Removed internal _download_output function as logic is now consolidated in __init__.py
+def _download_output(output_url, save_path=".", filename=None):
+    """
+    Downloads the content from a ComfyUI output URL and saves it to a file.
+
+    Args:
+        output_url (str): The full URL to the output file (e.g., from find_output_url or wait_for_finish).
+        save_path (str): The directory where the file should be saved. Defaults to current dir.
+        filename (str, optional): The desired filename. If None, it attempts to extract
+                                  from the URL or generates a unique name.
+
+    Returns:
+        str: The full path to the saved file.
+
+    Raises:
+        TimeoutError: If the download times out.
+        ComfyAPIError: For HTTP errors or file system errors.
+        ValueError: If output_url is invalid.
+    """
+    if not output_url:
+        raise ValueError("output_url cannot be None or empty.")
+
+    full_path = None # Initialize full_path to ensure it's defined in case of early error
+    try:
+        # Only create the directory if a specific path (not "" or ".") is provided
+        if save_path and save_path != ".":
+            os.makedirs(save_path, exist_ok=True)
+
+        # Determine the target filename (user-provided or extracted)
+        target_filename = None
+        if filename:
+            target_filename = filename # Use user-provided name first
+        else:
+            # Attempt to extract filename from URL query parameters
+            try:
+                parsed_url = urllib.parse.urlparse(output_url)
+                query_params = urllib.parse.parse_qs(parsed_url.query)
+                extracted_filenames = query_params.get('filename', [])
+                if extracted_filenames:
+                    target_filename = extracted_filenames[0] # Get raw filename first
+            except Exception:
+                pass # Ignore parsing errors, will use fallback
+
+        # If no filename extracted or provided, generate a fallback
+        if not target_filename:
+            target_filename = f"output_{_generate_client_id()}.unknown"
+
+        # ***Crucially, sanitize the filename AFTER determining it***
+        # This ensures only the final component is used as the filename.
+        final_basename = os.path.basename(target_filename)
+
+        # Construct the full path: use only the basename if save_path is "" or "."
+        if not save_path or save_path == ".":
+            full_path = final_basename
+        else:
+            full_path = os.path.join(save_path, final_basename)
+        print(f"Saving to final path: {full_path}")
+
+        # Download the content
+        print(f"Downloading from {output_url} to {full_path}...")
+        response = requests.get(output_url, timeout=120) # Longer timeout for download
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+        # Save the file
+        with open(full_path, 'wb') as f:
+            f.write(response.content)
+        print(f"Output saved to: {full_path}")
+        return full_path
+
+    except requests.exceptions.Timeout:
+        raise TimeoutError(f"Timeout downloading output from {output_url}")
+    except requests.exceptions.MissingSchema:
+         raise ValueError(f"Invalid URL format (Missing Schema): {output_url}")
+    except requests.exceptions.RequestException as e:
+        raise ComfyAPIError(f"HTTP error downloading output from {output_url}: {e}")
+    except IOError as e:
+        # Ensure full_path is sensible before including in error message
+        path_str = full_path if full_path else save_path
+        raise ComfyAPIError(f"File system error saving output to {path_str}: {e}")
+    except Exception as e: # Catch any other unexpected errors
+        raise ComfyAPIError(f"An unexpected error occurred during download: {e}")
